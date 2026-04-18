@@ -339,12 +339,16 @@
 
 </div>
 
-<!-- Supabase JS -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
-const SUPA_URL  = 'https://ctvdlamxicoxniyqcpfd.supabase.co';
-const SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0dmRsYW14aWNveG5peXFjcGZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA0MjQ0MDksImV4cCI6MjA1NjAwMDQwOX0.H00Y_vwQQBVmWrdIBdSb-IklfMfe7bzxdAESh7J0ouc';
-const supabase  = window.supabase.createClient(SUPA_URL, SUPA_ANON);
+// Auth via Supabase REST — sem CDN, zero dependências externas
+var SUPA_URL  = 'https://ctvdlamxicoxniyqcpfd.supabase.co';
+var SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0dmRsYW14aWNveG5peXFjcGZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA0MjQ0MDksImV4cCI6MjA1NjAwMDQwOX0.H00Y_vwQQBVmWrdIBdSb-IklfMfe7bzxdAESh7J0ouc';
+
+function hdrs(token) {
+  var h = { 'Content-Type': 'application/json', 'apikey': SUPA_ANON };
+  if (token) h['Authorization'] = 'Bearer ' + token;
+  return h;
+}
 
 function mostrarEstado(id) {
   ['state-form','state-sent','state-checking','state-denied'].forEach(function(s){
@@ -360,12 +364,11 @@ function setMsg(txt, tipo) {
 
 function voltarForm() {
   mostrarEstado('state-form');
-  document.getElementById('auth-subtitle').textContent = 'Área exclusiva para alunos';
   setMsg('');
   document.getElementById('auth-email').value = '';
 }
 
-async function enviarMagicLink() {
+function enviarMagicLink() {
   var email = document.getElementById('auth-email').value.trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     setMsg('Informe um e-mail válido.', 'error');
@@ -376,63 +379,75 @@ async function enviarMagicLink() {
   btn.textContent = 'Enviando...';
   setMsg('');
 
-  var _a = await supabase.auth.signInWithOtp({
-    email: email,
-    options: { emailRedirectTo: window.location.origin + window.location.pathname }
-  });
+  var redirect = window.location.origin + window.location.pathname;
 
-  btn.disabled = false;
-  btn.textContent = 'Enviar link de acesso';
-
-  if (_a.error) {
-    setMsg('Erro ao enviar: ' + _a.error.message, 'error');
-    return;
-  }
-
-  document.getElementById('sent-email').textContent = email;
-  mostrarEstado('state-sent');
-}
-
-async function verificarAcesso(session) {
-  mostrarEstado('state-checking');
-  var email = session.user.email;
-
-  var _q = await supabase
-    .from('alunos_palco')
-    .select('ativo')
-    .eq('email', email)
-    .maybeSingle();
-
-  if (_q.error || !_q.data || !_q.data.ativo) {
-    await supabase.auth.signOut();
-    mostrarEstado('state-denied');
-    return;
-  }
-
-  // Acesso autorizado
-  document.getElementById('auth-gate').style.display = 'none';
-  document.getElementById('main-content').style.display = 'block';
-}
-
-// Inicialização: verificar sessão existente ou token na URL
-(async function init() {
-  // Supabase captura o token da URL automaticamente no onAuthStateChange
-  supabase.auth.onAuthStateChange(async function(event, session) {
-    if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
-      await verificarAcesso(session);
+  fetch(SUPA_URL + '/auth/v1/otp', {
+    method: 'POST',
+    headers: hdrs(),
+    body: JSON.stringify({ email: email, options: { emailRedirectTo: redirect } })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data) {
+    btn.disabled = false;
+    btn.textContent = 'Enviar link de acesso';
+    if (data.error || data.msg === 'error') {
+      setMsg('Erro: ' + (data.error_description || data.msg || 'tente novamente'), 'error');
+      return;
     }
+    document.getElementById('sent-email').textContent = email;
+    mostrarEstado('state-sent');
+  })
+  .catch(function() {
+    btn.disabled = false;
+    btn.textContent = 'Enviar link de acesso';
+    setMsg('Erro de conexão. Verifique sua internet.', 'error');
   });
+}
 
-  // Verificar sessão ativa (reload da página)
-  var _s = await supabase.auth.getSession();
-  if (_s.data && _s.data.session) {
-    await verificarAcesso(_s.data.session);
-  }
+function verificarAcesso(token, email) {
+  mostrarEstado('state-checking');
+  fetch(SUPA_URL + '/rest/v1/alunos_palco?email=eq.' + encodeURIComponent(email) + '&select=ativo', {
+    headers: hdrs(token)
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(data) {
+    if (!Array.isArray(data) || data.length === 0 || !data[0].ativo) {
+      mostrarEstado('state-denied');
+      return;
+    }
+    document.getElementById('auth-gate').style.display = 'none';
+    document.getElementById('main-content').style.display = 'block';
+  })
+  .catch(function() { mostrarEstado('state-denied'); });
+}
 
-  // Enter no campo de email
+// Captura token do hash da URL (retorno do magic link)
+(function init() {
   document.getElementById('auth-email').addEventListener('keydown', function(e){
     if (e.key === 'Enter') enviarMagicLink();
   });
+
+  var hash = window.location.hash;
+  if (hash && hash.indexOf('access_token') !== -1) {
+    var params = {};
+    hash.replace('#','').split('&').forEach(function(p){
+      var kv = p.split('='); params[kv[0]] = decodeURIComponent(kv[1] || '');
+    });
+    if (params.access_token && params.type === 'magiclink') {
+      // Buscar email do usuário com o token
+      fetch(SUPA_URL + '/auth/v1/user', { headers: hdrs(params.access_token) })
+      .then(function(r){ return r.json(); })
+      .then(function(user) {
+        if (user && user.email) {
+          history.replaceState(null, '', window.location.pathname);
+          verificarAcesso(params.access_token, user.email);
+        } else {
+          mostrarEstado('state-denied');
+        }
+      })
+      .catch(function() { mostrarEstado('state-denied'); });
+    }
+  }
 })();
 </script>
 
