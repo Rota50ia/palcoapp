@@ -1,0 +1,274 @@
+{
+  "name": "PALCO — Sprint 2 (memoria Supabase)",
+  "nodes": [
+    {
+      "id": "palco-webhook-uazapi",
+      "name": "Webhook UazAPI",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-480, 400],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "palco-mensagem",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "palco-mensagem-webhook"
+    },
+    {
+      "id": "palco-normalizar",
+      "name": "Normalizar Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-256, 400],
+      "parameters": {
+        "jsCode": "// PALCO — Normalizador de entrada UazAPI\n// Identico ao Sprint 1: extrai number/text/fromMe do payload UazAPI.\n\nconst raw = $input.first().json;\nconst body = raw.body || raw;\n\nlet number =\n  body.sender ||\n  body.from ||\n  body.number ||\n  body.phone ||\n  (body.message && (body.message.sender || body.message.from || body.message.chatid)) ||\n  (body.data && (body.data.sender || body.data.from || body.data.chatid)) ||\n  '';\n\nif (typeof number === 'string') {\n  number = number.replace(/@.+$/, '').replace(/\\D/g, '');\n}\n\nconst text =\n  body.text ||\n  body.message_text ||\n  body.content ||\n  (body.message && (body.message.text || body.message.body || body.message.content)) ||\n  (body.data && (body.data.text || body.data.body || body.data.message)) ||\n  (body.messages && body.messages[0] && (body.messages[0].message || body.messages[0].text)) ||\n  '';\n\nconst fromMe =\n  body.fromMe === true ||\n  body.from_me === true ||\n  (body.message && body.message.fromMe === true) ||\n  (body.data && body.data.fromMe === true) ||\n  false;\n\nconst messageType =\n  body.messageType ||\n  body.type ||\n  (body.message && body.message.type) ||\n  (body.data && body.data.type) ||\n  'text';\n\nconst isText = typeof text === 'string' && text.trim().length > 0;\nconst shouldProcess = isText && !fromMe && !!number;\n\nreturn [{\n  json: {\n    number,\n    text: (text || '').toString().trim(),\n    fromMe,\n    messageType,\n    shouldProcess,\n    receivedAt: new Date().toISOString(),\n    rawKeys: Object.keys(body)\n  }\n}];"
+      }
+    },
+    {
+      "id": "palco-filtrar",
+      "name": "Mensagem Valida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-32, 400],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "cond-should-process",
+              "leftValue": "={{ $json.shouldProcess }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "palco-buscar-usuario",
+      "name": "Buscar Usuario Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [192, 304],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://ctvdlamxicoxniyqcpfd.supabase.co/rest/v1/usuarios_palco?numero_whatsapp=eq.{{ $json.number }}&select=*",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" }
+          ]
+        },
+        "options": {
+          "timeout": 15000,
+          "response": { "response": { "neverError": true, "responseFormat": "json" } }
+        }
+      }
+    },
+    {
+      "id": "palco-router-estado",
+      "name": "Router & Estado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [416, 304],
+      "parameters": {
+        "jsCode": "// PALCO — Router de estado e montador de prompt.\n// Decide a rota (onboarding P1/P2/P3/confirma, sessao_semanal) e:\n//   1. Aplica a resposta do usuario a ficha (se aplicavel)\n//   2. Monta o system prompt dinamico para o Claude\n//   3. Prepara o objeto que sera upserted no Supabase\n//\n// KISS: estado do onboarding e contado via campos da ficha (sem campo extra).\n//   - sem row            -> primeiro contato -> apresentacao + P1\n//   - tem row, pergunta_atual = 'P1' -> esta mensagem e resposta de P1 -> salva ativo_principal, faz P2\n//   - pergunta_atual = 'P2' -> salva publico, faz P3\n//   - pergunta_atual = 'P3' -> salva emocao_alvo, confirma onboarding, abre sessao semanal\n//   - status_onboarding = 'concluido' -> sessao semanal (usa ficha como contexto)\n\nconst norm = $('Normalizar Mensagem').item.json;\nconst userMessage = norm.text;\nconst numero = norm.number;\n\nconst lookupResp = $input.first().json;\n// Supabase REST sempre retorna array (possivelmente vazio). Se vier error shape, tratar.\nlet usuario = null;\nif (Array.isArray(lookupResp) && lookupResp.length > 0) {\n  usuario = lookupResp[0];\n} else if (Array.isArray(lookupResp) && lookupResp.length === 0) {\n  usuario = null;\n} else if (lookupResp && lookupResp.error) {\n  // erro de Supabase — logamos mas seguimos como se fosse primeiro contato, para nao travar o usuario.\n  // o save na frente tambem pode falhar, mas o musico pelo menos recebe resposta.\n  usuario = null;\n}\n\n// --- Decidir rota ---\nlet route;           // 'ONBOARDING_INICIO' | 'ONBOARDING_P1_RESP' | 'ONBOARDING_P2_RESP' | 'ONBOARDING_P3_RESP' | 'SESSAO_SEMANAL'\nlet fichaAtual  = (usuario && usuario.ficha)        || {};\nlet sessao      = (usuario && usuario.sessao_atual) || { ativa: false };\nlet calibracao  = (usuario && usuario.calibracao)   || { semanas: [], ajustes_tom: [] };\nlet statusOnb   = (usuario && usuario.status_onboarding) || 'em_andamento';\nlet perguntaAtual = (usuario && usuario.pergunta_atual)  || null;\n\nif (!usuario) {\n  route = 'ONBOARDING_INICIO';\n  perguntaAtual = 'P1';\n} else if (statusOnb === 'em_andamento' && perguntaAtual === 'P1') {\n  route = 'ONBOARDING_P1_RESP';\n  fichaAtual = Object.assign({}, fichaAtual, { ativo_principal: userMessage });\n  perguntaAtual = 'P2';\n} else if (statusOnb === 'em_andamento' && perguntaAtual === 'P2') {\n  route = 'ONBOARDING_P2_RESP';\n  fichaAtual = Object.assign({}, fichaAtual, { publico: userMessage });\n  perguntaAtual = 'P3';\n} else if (statusOnb === 'em_andamento' && perguntaAtual === 'P3') {\n  route = 'ONBOARDING_P3_RESP';\n  fichaAtual = Object.assign({}, fichaAtual, { emocao_alvo: userMessage });\n  perguntaAtual = null;\n  statusOnb = 'concluido';\n} else if (statusOnb === 'concluido') {\n  route = 'SESSAO_SEMANAL';\n} else {\n  // fallback defensivo: status estranho, reinicia onboarding mas mantem ficha antiga\n  route = 'ONBOARDING_INICIO';\n  perguntaAtual = 'P1';\n  statusOnb = 'em_andamento';\n}\n\n// --- Vocabulario e tom (compartilhado entre rotas) ---\nconst tomPalco = [\n  'Voce e o PALCO — assistente de conteudo para Instagram de musicos profissionais.',\n  'Voce nao e uma IA generica de marketing. Voce e uma extensao da voz do musico no digital.',\n  '',\n  'TOM: direto, sem bajulacao. Trata o musico como profissional que ja construiu algo real.',\n  'Faz distincoes precisas. Perguntas especificas, nunca genericas. Corta o que e vago.',\n  '',\n  'VOCABULARIO PROIBIDO: engajamento, alcance, audiencia, conteudo de valor, agregar valor, posicionamento, branding, storytelling, jornada, persona, nicho estrategico, autoridade digital.',\n  'Use em vez: pessoas que te seguem, quem vai ver, o que voce posta, o que voce faz, como voce trabalha, quem te contrata, quem aprende com voce.'\n].join('\\n');\n\n// --- Monta system prompt conforme a rota ---\nlet systemPrompt;\n\nif (route === 'ONBOARDING_INICIO') {\n  systemPrompt = tomPalco + '\\n\\n' + [\n    'CONTEXTO: este musico esta te contatando pela PRIMEIRA VEZ. Nenhuma ficha salva ainda.',\n    '',\n    'ACAO UNICA NESTA RESPOSTA:',\n    '1. Apresente-se em UMA frase curta.',\n    '2. Diga que fara 3 perguntas de identidade, uma por vez.',\n    '3. Faca APENAS a PERGUNTA 1, exatamente esta:',\n    '   \"Qual e o seu ativo mais forte — aquilo pelo qual as pessoas te buscam especificamente, nao qualquer musico com o mesmo perfil?\"',\n    '',\n    'NAO faca P2 nem P3 nesta mensagem. Aguarde a resposta.',\n    'Nao gere conteudo de Instagram agora — onboarding primeiro.'\n  ].join('\\n');\n} else if (route === 'ONBOARDING_P1_RESP') {\n  systemPrompt = tomPalco + '\\n\\n' + [\n    'CONTEXTO: o musico acabou de responder a PERGUNTA 1 (ativo principal).',\n    'Resposta dele: \"' + userMessage + '\"',\n    '',\n    'ACAO UNICA:',\n    '1. Reconheca a resposta em UMA frase curta (sem bajulacao, sem repetir a resposta inteira).',\n    '2. Faca APENAS a PERGUNTA 2, exatamente esta:',\n    '   \"Quem e a pessoa que mais se beneficia do que voce faz? Descreve ela em uma frase.\"',\n    '',\n    'NAO faca P3 ainda. Aguarde a resposta.'\n  ].join('\\n');\n} else if (route === 'ONBOARDING_P2_RESP') {\n  systemPrompt = tomPalco + '\\n\\n' + [\n    'CONTEXTO: o musico acabou de responder a PERGUNTA 2 (publico).',\n    'Ficha parcial salva:',\n    '  ativo_principal: ' + (fichaAtual.ativo_principal || '(nao preenchido)'),\n    '  publico:         ' + (fichaAtual.publico || userMessage),\n    '',\n    'ACAO UNICA:',\n    '1. Reconheca a resposta em UMA frase curta.',\n    '2. Faca APENAS a PERGUNTA 3, exatamente esta:',\n    '   \"O que voce quer que alguem sinta quando termina de ver um post seu?\"',\n    '',\n    'Aguarde a resposta antes de gerar qualquer conteudo.'\n  ].join('\\n');\n} else if (route === 'ONBOARDING_P3_RESP') {\n  systemPrompt = tomPalco + '\\n\\n' + [\n    'CONTEXTO: onboarding concluido. O musico acabou de responder a PERGUNTA 3 (emocao alvo).',\n    '',\n    'DNA SALVO:',\n    '  ativo_principal: ' + (fichaAtual.ativo_principal || '(vazio)'),\n    '  publico:         ' + (fichaAtual.publico || '(vazio)'),\n    '  emocao_alvo:     ' + (fichaAtual.emocao_alvo || userMessage),\n    '',\n    'ACAO UNICA:',\n    '1. Confirme em UMA frase que o DNA foi salvo: \"Entendido. Isso e o seu DNA aqui dentro. Toda semana o conteudo vai partir daqui.\"',\n    '2. Abra a primeira sessao semanal perguntando: \"O que aconteceu essa semana que vale ser contado — um show, uma aula, uma gravacao, um momento, uma percepcao?\"',\n    '',\n    'Nao gere o pacote semanal ainda — espere o musico responder o que aconteceu.'\n  ].join('\\n');\n} else if (route === 'SESSAO_SEMANAL') {\n  const calibText = (calibracao && calibracao.semanas && calibracao.semanas.length > 0)\n    ? JSON.stringify(calibracao.semanas.slice(-3))\n    : '(sem calibracao ainda — primeira sessao apos onboarding)';\n  systemPrompt = tomPalco + '\\n\\n' + [\n    'CONTEXTO: onboarding concluido. Este musico ja tem DNA salvo.',\n    '',\n    'DNA DO MUSICO:',\n    '  ativo_principal: ' + (fichaAtual.ativo_principal || '(vazio)'),\n    '  publico:         ' + (fichaAtual.publico || '(vazio)'),\n    '  emocao_alvo:     ' + (fichaAtual.emocao_alvo || '(vazio)'),\n    '',\n    'CALIBRACAO (ultimas 3 semanas): ' + calibText,\n    '',\n    'FLUXO DA SESSAO SEMANAL:',\n    '- Se a mensagem do musico e vaga (ex: \"oi\", \"bom dia\") -> pergunte: \"O que aconteceu essa semana que vale ser contado — um show, uma aula, uma gravacao, um momento, uma percepcao?\"',\n    '- Se a mensagem ja tem um fato concreto da semana -> cruze com o DNA e gere o PACOTE SEMANAL no formato fixo:',\n    '',\n    '   FEED (caption 3-5 paragrafos)',\n    '   REELS (caption 2-3 linhas)',\n    '   STORIES (3 frames: provocacao / fato / CTA)',\n    '   GANCHO DA SEMANA (max 12 palavras)',\n    '   CTA (acao especifica, nao \"curte e compartilha\")',\n    '',\n    '- Apos o pacote, pergunte: \"Alguma peca que nao soa como voce? Ajusto antes de voce postar.\"',\n    '',\n    'REGRAS: nunca invente fatos; se o input for vago, peca especificidade; voz soa como o musico, nao como IA de marketing.'\n  ].join('\\n');\n} else {\n  systemPrompt = tomPalco + '\\n\\nResponda de forma curta pedindo para o musico repetir a mensagem.';\n}\n\n// --- Objeto que sera salvo no Supabase (upsert) ---\n// Para ONBOARDING_INICIO: cria a row com pergunta_atual=P1 e ficha vazia.\n// Para ONBOARDING_P*_RESP: atualiza ficha + pergunta_atual.\n// Para SESSAO_SEMANAL: so atualiza atualizado_em (trigger cuida), sem mudar ficha/status.\n//   -> saveNeeded=false evita roundtrip desnecessario.\nlet saveNeeded = true;\nlet saveBody;\n\nif (route === 'SESSAO_SEMANAL') {\n  // KISS Sprint 2: nao persistimos evento_semana/pacote_gerado ainda — isso e Sprint 3.\n  // O trigger atualizado_em dispara em qualquer UPDATE, mas evitamos writes desnecessarios.\n  saveNeeded = false;\n  saveBody = null;\n} else {\n  saveBody = {\n    numero_whatsapp:   numero,\n    status_onboarding: statusOnb,\n    pergunta_atual:    perguntaAtual,\n    ficha:             fichaAtual\n  };\n}\n\nreturn [{\n  json: {\n    route,\n    numero,\n    userMessage,\n    systemPrompt,\n    saveNeeded,\n    saveBody,\n    debug: {\n      statusOnb,\n      perguntaAtual,\n      fichaKeys: Object.keys(fichaAtual),\n      existiaRow: !!usuario\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "palco-claude-request",
+      "name": "Claude API (Palco)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [640, 304],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key",         "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type",      "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-4-5-20250929', max_tokens: 2048, system: $json.systemPrompt, messages: [{ role: 'user', content: $json.userMessage }] }) }}",
+        "options": {
+          "timeout": 60000,
+          "response": { "response": { "neverError": true, "responseFormat": "json" } }
+        }
+      }
+    },
+    {
+      "id": "palco-extrair-resposta",
+      "name": "Extrair Texto Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [864, 304],
+      "parameters": {
+        "jsCode": "// Extrai texto da resposta da API Anthropic.\n// Tratar erro da API sem quebrar o workflow (responder algo ao musico).\n\nconst r = $input.first().json;\nconst router = $('Router & Estado').item.json;\n\nlet reply = '';\nlet ok = false;\n\nif (r && Array.isArray(r.content) && r.content.length > 0) {\n  const textBlock = r.content.find(b => b && b.type === 'text');\n  if (textBlock && textBlock.text) {\n    reply = textBlock.text;\n    ok = true;\n  }\n}\n\nif (!ok) {\n  const errMsg = (r && r.error && (r.error.message || r.error.type)) || 'erro desconhecido';\n  reply = 'PALCO esta temporariamente fora do ar (modo teste). Codigo: ' + errMsg + '. Tenta de novo em 1 minuto — se persistir, avisa o Edilson.';\n}\n\nreturn [{\n  json: {\n    number:       router.numero,\n    reply,\n    ok,\n    route:        router.route,\n    saveNeeded:   router.saveNeeded,\n    saveBody:     router.saveBody,\n    rawAnthropicKeys: r ? Object.keys(r) : [],\n    usage:        (r && r.usage) || null,\n    debug:        router.debug\n  }\n}];"
+      }
+    },
+    {
+      "id": "palco-salvar-gate",
+      "name": "Precisa Salvar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1088, 304],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "cond-save",
+              "leftValue": "={{ $json.saveNeeded }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "palco-salvar-usuario",
+      "name": "Salvar Usuario Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1312, 208],
+      "parameters": {
+        "method": "POST",
+        "url": "https://ctvdlamxicoxniyqcpfd.supabase.co/rest/v1/usuarios_palco?on_conflict=numero_whatsapp",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey",        "value": "={{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_ROLE_KEY }}" },
+            { "name": "Content-Type",  "value": "application/json" },
+            { "name": "Prefer",        "value": "resolution=merge-duplicates,return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.saveBody) }}",
+        "options": {
+          "timeout": 15000,
+          "response": { "response": { "neverError": true, "responseFormat": "json" } }
+        }
+      }
+    },
+    {
+      "id": "palco-enviar-whatsapp",
+      "name": "WhatsApp: Enviar Resposta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1536, 304],
+      "parameters": {
+        "method": "POST",
+        "url": "https://edilsonmorais.uazapi.com/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "token", "value": "62a7447d-fdb3-41e0-b342-4835cb812490" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Extrair Texto Claude').item.json.number, text: $('Extrair Texto Claude').item.json.reply }) }}",
+        "options": {
+          "timeout": 30000,
+          "response": { "response": { "neverError": true, "responseFormat": "json" } }
+        }
+      }
+    },
+    {
+      "id": "palco-respond-ok",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1760, 400],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "{\"status\":\"ok\",\"workflow\":\"palco-sprint-2\"}",
+        "options": { "responseCode": 200 }
+      }
+    },
+    {
+      "id": "palco-respond-ignored",
+      "name": "Respond Ignored",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [192, 496],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ JSON.stringify({ status: 'ignored', reason: 'mensagem sem texto, eco do proprio numero, ou numero ausente', shouldProcess: $json.shouldProcess, fromMe: $json.fromMe, messageType: $json.messageType }) }}",
+        "options": { "responseCode": 200 }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook UazAPI":            { "main": [[{ "node": "Normalizar Mensagem",        "type": "main", "index": 0 }]] },
+    "Normalizar Mensagem":       { "main": [[{ "node": "Mensagem Valida?",           "type": "main", "index": 0 }]] },
+    "Mensagem Valida?":          { "main": [[{ "node": "Buscar Usuario Supabase",    "type": "main", "index": 0 }],
+                                             [{ "node": "Respond Ignored",           "type": "main", "index": 0 }]] },
+    "Buscar Usuario Supabase":   { "main": [[{ "node": "Router & Estado",            "type": "main", "index": 0 }]] },
+    "Router & Estado":           { "main": [[{ "node": "Claude API (Palco)",         "type": "main", "index": 0 }]] },
+    "Claude API (Palco)":        { "main": [[{ "node": "Extrair Texto Claude",       "type": "main", "index": 0 }]] },
+    "Extrair Texto Claude":      { "main": [[{ "node": "Precisa Salvar?",            "type": "main", "index": 0 }]] },
+    "Precisa Salvar?":           { "main": [[{ "node": "Salvar Usuario Supabase",    "type": "main", "index": 0 }],
+                                             [{ "node": "WhatsApp: Enviar Resposta", "type": "main", "index": 0 }]] },
+    "Salvar Usuario Supabase":   { "main": [[{ "node": "WhatsApp: Enviar Resposta",  "type": "main", "index": 0 }]] },
+    "WhatsApp: Enviar Resposta": { "main": [[{ "node": "Respond 200 OK",             "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  },
+  "_meta": {
+    "versao": "2.0 — Sprint 2 — 18/04/2026",
+    "nodes": 12,
+    "sprint": "2 — memoria via Supabase (ficha por numero_whatsapp)",
+    "workflow_id_alvo": "p4w24acxcwpap4ms",
+    "descricao": "Sprint 1 + camada de memoria: GET Supabase por numero -> router de estado (onboarding P1/P2/P3 ou sessao semanal) -> Claude com system prompt dinamico -> upsert Supabase (se ficha mudou) -> UazAPI.",
+    "dependencias": {
+      "env_vars": [
+        "ANTHROPIC_API_KEY (sk-ant-api03-...)",
+        "SUPABASE_SERVICE_ROLE_KEY (service_role, NAO anon — necessario para bypass de RLS)"
+      ],
+      "uazapi_token": "62a7447d-fdb3-41e0-b342-4835cb812490 (hardcoded no node WhatsApp — padrao do projeto)",
+      "supabase_project": "ctvdlamxicoxniyqcpfd",
+      "tabela": "public.usuarios_palco (criada via PALCO-SUPABASE-SPRINT2.sql)",
+      "uazapi_webhook_config": "apontar UazAPI para https://edilson-dark-n8n.7lvlou.easypanel.host/webhook/palco-mensagem"
+    },
+    "mudancas_vs_sprint1": [
+      "+ Node 'Buscar Usuario Supabase' — GET REST antes de chamar Claude",
+      "+ Node 'Router & Estado' — decide rota e monta system prompt dinamico (substitui o prompt inline do Sprint 1)",
+      "+ Node 'Precisa Salvar?' — evita upsert em sessao semanal sem mudanca de ficha",
+      "+ Node 'Salvar Usuario Supabase' — POST upsert (on_conflict=numero_whatsapp, resolution=merge-duplicates)",
+      "~ Node 'Claude API (Palco)' — system prompt agora vem do Router, nao inline no jsonBody",
+      "~ Removida a nota de sistema 'modo teste sem memoria' (agora tem memoria)"
+    ],
+    "estado_machine": {
+      "ONBOARDING_INICIO":    "Sem row no Supabase. Cria row com pergunta_atual=P1. Claude apresenta-se e faz P1.",
+      "ONBOARDING_P1_RESP":   "Msg e resposta de P1. Salva ativo_principal. Marca pergunta_atual=P2. Claude faz P2.",
+      "ONBOARDING_P2_RESP":   "Msg e resposta de P2. Salva publico. Marca pergunta_atual=P3. Claude faz P3.",
+      "ONBOARDING_P3_RESP":   "Msg e resposta de P3. Salva emocao_alvo. status_onboarding=concluido. Claude confirma e abre sessao semanal.",
+      "SESSAO_SEMANAL":       "Onboarding completo. Claude recebe ficha + calibracao como contexto e gera pacote ou pede especificidade. saveNeeded=false (Sprint 3 persiste evento/pacote)."
+    },
+    "limitacoes_sprint2": [
+      "SESSAO_SEMANAL nao persiste evento_semana nem pacote_gerado — Sprint 3",
+      "Calibracao nao e atualizada automaticamente — Sprint 3 (endpoint RPC palco_append_calibracao ja existe no guia)",
+      "Nao ha suporte para 'voltar uma pergunta' no onboarding — musico precisa completar P1->P2->P3 em ordem",
+      "Se Supabase GET falhar, workflow assume 'primeiro contato' (degradacao graciosa) — pode criar duplicata se GET falhar por intermitencia e o INSERT subsequente tambem falhar (aceitavel para 10-30 usuarios)"
+    ]
+  }
+}

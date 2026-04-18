@@ -1,0 +1,167 @@
+{
+  "name": "PALCO — Sprint 1 (stateless echo)",
+  "nodes": [
+    {
+      "id": "palco-webhook-uazapi",
+      "name": "Webhook UazAPI",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-320, 400],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "palco-mensagem",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "palco-mensagem-webhook"
+    },
+    {
+      "id": "palco-normalizar",
+      "name": "Normalizar Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-96, 400],
+      "parameters": {
+        "jsCode": "// PALCO — Normalizador de entrada UazAPI\n// Aceita tanto payload no body direto quanto envelopado (fromMe, messages[], etc).\n// Sprint 1: stateless — sem Supabase, sem memoria.\n\nconst raw = $input.first().json;\nconst body = raw.body || raw;\n\n// --- extrair numero do remetente ---\n// UazAPI envia varias formas conforme o evento.\nlet number =\n  body.sender ||\n  body.from ||\n  body.number ||\n  body.phone ||\n  (body.message && (body.message.sender || body.message.from || body.message.chatid)) ||\n  (body.data && (body.data.sender || body.data.from || body.data.chatid)) ||\n  '';\n\n// limpa '@s.whatsapp.net' / '@c.us' se vier assim\nif (typeof number === 'string') {\n  number = number.replace(/@.+$/, '').replace(/\\D/g, '');\n}\n\n// --- extrair texto da mensagem ---\nconst text =\n  body.text ||\n  body.message_text ||\n  body.content ||\n  (body.message && (body.message.text || body.message.body || body.message.content)) ||\n  (body.data && (body.data.text || body.data.body || body.data.message)) ||\n  (body.messages && body.messages[0] && (body.messages[0].message || body.messages[0].text)) ||\n  '';\n\n// --- detectar eco (mensagens enviadas pelo proprio numero) ---\nconst fromMe =\n  body.fromMe === true ||\n  body.from_me === true ||\n  (body.message && body.message.fromMe === true) ||\n  (body.data && body.data.fromMe === true) ||\n  false;\n\n// --- detectar tipo (so processar mensagens de texto recebidas) ---\nconst messageType =\n  body.messageType ||\n  body.type ||\n  (body.message && body.message.type) ||\n  (body.data && body.data.type) ||\n  'text';\n\nconst isText = typeof text === 'string' && text.trim().length > 0;\nconst shouldProcess = isText && !fromMe && !!number;\n\nreturn [{\n  json: {\n    number,\n    text: (text || '').toString().trim(),\n    fromMe,\n    messageType,\n    shouldProcess,\n    receivedAt: new Date().toISOString(),\n    rawKeys: Object.keys(body)\n  }\n}];"
+      }
+    },
+    {
+      "id": "palco-filtrar",
+      "name": "Mensagem Valida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [128, 400],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "cond-should-process",
+              "leftValue": "={{ $json.shouldProcess }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "palco-claude-request",
+      "name": "Claude API (Palco)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [352, 304],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key",         "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type",      "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'claude-sonnet-4-5-20250929', max_tokens: 2048, system: 'Voce e o Palco — assistente de conteudo para Instagram de musicos profissionais.\\n\\nVoce nao e uma IA generica de marketing. Voce e uma extensao da voz do musico no digital.\\n\\nIDENTIDADE\\nTom: direto, sem bajulacao. Trata o musico como profissional que ja construiu algo real — nao como iniciante que precisa de incentivo.\\nVoce faz distincoes precisas. Voce faz perguntas especificas, nunca genericas. Voce corta o que e vago e pede o que e concreto.\\n\\nVOCABULARIO PROIBIDO\\nNUNCA use: engajamento, alcance, audiencia, conteudo de valor, agregar valor, posicionamento, branding, storytelling, jornada, persona, nicho estrategico, autoridade digital.\\n\\nUSE em vez disso: pessoas que te seguem, quem vai ver, o que voce posta, o que voce faz, como voce trabalha, quem te contrata, quem aprende com voce.\\n\\nSESSAO 1 — ONBOARDING (primeira vez)\\nAntes de gerar qualquer conteudo, faca as 3 perguntas de identidade — uma por vez, aguarde a resposta antes de avancar.\\n\\nApresentacao: \"Antes de criar qualquer coisa, preciso entender quem voce e. Tres perguntas — responde com honestidade, nao com o que acha que soa bem.\"\\n\\nP1: \"Qual e o seu ativo mais forte — aquilo pelo qual as pessoas te buscam especificamente, nao qualquer musico com o mesmo perfil?\"\\nP2: \"Quem e a pessoa que mais se beneficia do que voce faz? Descreve ela em uma frase.\"\\nP3: \"O que voce quer que alguem sinta quando termina de ver um post seu?\"\\n\\nApos as 3 respostas, confirme: \"Entendido. Isso e o seu DNA aqui dentro. Toda semana o conteudo vai partir daqui.\"\\n\\nSESSAO SEMANAL\\nAbertura: \"O que aconteceu essa semana que vale ser contado — um show, uma aula, uma gravacao, um momento, uma percepcao?\"\\n\\nSe a resposta for vaga, peca especificidade: \"Me da um detalhe concreto — o que exatamente aconteceu, onde, com quem, o que voce sentiu?\"\\n\\nCom a resposta em maos, cruze com o DNA salvo e gere o PACOTE SEMANAL (formato fixo):\\n\\n📌 FEED — caption longa 3 a 5 paragrafos. Abre com o fato da semana. Desenvolve com o que ele revela sobre o trabalho do musico. Fecha com o que o leitor pode fazer com isso.\\n\\n🎬 REELS — caption curta 2 a 3 linhas. Complementa o video, nao repete. Tom mais direto e energetico.\\n\\n📱 STORIES — sequencia de 3 frames: Frame 1 pergunta ou provocacao, Frame 2 o fato ou bastidor, Frame 3 CTA simples.\\n\\n⚡ GANCHO DA SEMANA — uma frase de abertura de alto impacto. Maximo 12 palavras.\\n\\n🎯 CTA — uma acao especifica. Nao use \"curte e compartilha\".\\n\\nApos entregar o pacote, pergunte: \"Alguma peca que nao soa como voce? Ajusto antes de voce postar.\"\\n\\nREGRAS INEGOCIAVEIS\\n1. Nunca gere conteudo antes do onboarding estar completo.\\n2. Nunca use o vocabulario proibido.\\n3. Nunca invente fatos — so o musico sabe o que aconteceu na semana dele.\\n4. Se o musico der input vago, peca especificidade antes de gerar.\\n5. O conteudo deve soar como o musico, nao como uma IA de marketing.\\n6. Sempre ofereca ajuste apos a entrega.\\n\\nOBSERVACAO DE SISTEMA (Sprint 1): Voce ainda NAO tem memoria entre mensagens. Cada mensagem chega isolada. Se o usuario parecer estar continuando uma conversa anterior (ex: respondendo a uma pergunta que voce nao fez nesta mensagem), diga com clareza: \"Ainda estou rodando em modo de teste sem memoria. Me conta de novo do zero: qual seu ativo principal?\" Essa nota de sistema sera removida no Sprint 2 quando a memoria estiver ativa.', messages: [{ role: 'user', content: $('Normalizar Mensagem').item.json.text }] }) }}",
+        "options": {
+          "timeout": 60000,
+          "response": { "response": { "neverError": true, "responseFormat": "json" } }
+        }
+      }
+    },
+    {
+      "id": "palco-extrair-resposta",
+      "name": "Extrair Texto Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [576, 304],
+      "parameters": {
+        "jsCode": "// Extrai texto da resposta da API Anthropic.\n// Shape esperado: { content: [ { type: 'text', text: '...' } ], ... }\n// Tratar erro da API sem quebrar o workflow (responder algo ao musico).\n\nconst r = $input.first().json;\n\nlet reply = '';\nlet ok = false;\n\nif (r && Array.isArray(r.content) && r.content.length > 0) {\n  const textBlock = r.content.find(b => b && b.type === 'text');\n  if (textBlock && textBlock.text) {\n    reply = textBlock.text;\n    ok = true;\n  }\n}\n\n// fallback: erro da API Anthropic (ex: 401, 429, 500)\nif (!ok) {\n  const errMsg = (r && r.error && (r.error.message || r.error.type)) || 'erro desconhecido';\n  reply = 'Palco esta temporariamente fora do ar (modo teste). Codigo: ' + errMsg + '. Tenta de novo em 1 minuto — se persistir, avisa o Edilson.';\n}\n\nconst number = $('Normalizar Mensagem').item.json.number;\n\nreturn [{\n  json: {\n    number,\n    reply,\n    ok,\n    rawAnthropicKeys: r ? Object.keys(r) : [],\n    usage: (r && r.usage) || null\n  }\n}];"
+      }
+    },
+    {
+      "id": "palco-enviar-whatsapp",
+      "name": "WhatsApp: Enviar Resposta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [800, 304],
+      "parameters": {
+        "method": "POST",
+        "url": "https://edilsonmorais.uazapi.com/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "token", "value": "62a7447d-fdb3-41e0-b342-4835cb812490" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.number, text: $json.reply }) }}",
+        "options": {
+          "timeout": 30000,
+          "response": { "response": { "neverError": true, "responseFormat": "json" } }
+        }
+      }
+    },
+    {
+      "id": "palco-respond-ok",
+      "name": "Respond 200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1024, 400],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "{\"status\":\"ok\",\"workflow\":\"palco-sprint-1\"}",
+        "options": { "responseCode": 200 }
+      }
+    },
+    {
+      "id": "palco-respond-ignored",
+      "name": "Respond Ignored",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [352, 496],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ JSON.stringify({ status: 'ignored', reason: 'mensagem sem texto, eco do proprio numero, ou numero ausente', shouldProcess: $json.shouldProcess, fromMe: $json.fromMe, messageType: $json.messageType }) }}",
+        "options": { "responseCode": 200 }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook UazAPI":            { "main": [[{ "node": "Normalizar Mensagem",     "type": "main", "index": 0 }]] },
+    "Normalizar Mensagem":       { "main": [[{ "node": "Mensagem Valida?",        "type": "main", "index": 0 }]] },
+    "Mensagem Valida?":          { "main": [[{ "node": "Claude API (Palco)",      "type": "main", "index": 0 }],
+                                             [{ "node": "Respond Ignored",        "type": "main", "index": 0 }]] },
+    "Claude API (Palco)":        { "main": [[{ "node": "Extrair Texto Claude",    "type": "main", "index": 0 }]] },
+    "Extrair Texto Claude":      { "main": [[{ "node": "WhatsApp: Enviar Resposta","type": "main", "index": 0 }]] },
+    "WhatsApp: Enviar Resposta": { "main": [[{ "node": "Respond 200 OK",          "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  },
+  "_meta": {
+    "versao": "1.0 — Sprint 1 — 18/04/2026",
+    "nodes": 8,
+    "sprint": "1 — stateless echo (sem Supabase, sem memoria)",
+    "descricao": "Musico manda mensagem WhatsApp -> UazAPI posta no webhook -> Claude responde com prompt PALCO -> UazAPI devolve a resposta para o musico. Sem memoria entre mensagens.",
+    "dependencias": {
+      "env_var": "ANTHROPIC_API_KEY (adicionar em n8n via Settings > Environment Variables OU Credentials > HTTP Header Auth)",
+      "uazapi_token": "62a7447d-fdb3-41e0-b342-4835cb812490 (ja hardcoded no node WhatsApp)",
+      "uazapi_webhook_config": "apontar UazAPI para https://edilson-dark-n8n.7lvlou.easypanel.host/webhook/palco-mensagem"
+    },
+    "limitacoes": [
+      "Sem memoria entre mensagens — cada msg e isolada. Sprint 2 resolve.",
+      "Sem Supabase — ficha de identidade nao persiste. Sprint 2 resolve.",
+      "Sem calibracao semana a semana — depende de ficha salva (Sprint 2).",
+      "Payload do webhook UazAPI assume shape comum (sender/text/fromMe). Se UazAPI enviar shape diferente, ajustar node 'Normalizar Mensagem' consultando o log do primeiro teste."
+    ]
+  }
+}

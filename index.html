@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#080808">
+<meta name="description" content="Palco — agente de conteúdo para Instagram de músicos profissionais.">
+<meta property="og:title" content="Palco — conteúdo semanal para músico profissional">
+<meta property="og:description" content="Um agente treinado na sua voz. Você conta a semana. Ele devolve o pacote pronto para postar.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="http://palcoapp.rota50ia.com">
+<title>Palco — conteúdo semanal para músico profissional</title>
+<style>
+  :root {
+    --gold:       #c9a227;
+    --gold-light: #e8c547;
+    --gold-dim:   rgba(201,162,39,0.12);
+    --gold-glow:  rgba(201,162,39,0.25);
+    --surface-0:  #080808;
+    --surface-1:  #101010;
+    --surface-2:  #181818;
+    --surface-3:  #222222;
+    --text-1:     #f0f0f0;
+    --text-2:     #a8a8a8;
+    --text-3:     #707070;
+    --border-1:   rgba(255,255,255,0.08);
+    --border-gold:rgba(201,162,39,0.35);
+    --radius-sm:  8px;
+    --radius-md:  12px;
+    --radius-lg:  16px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font);
+    background: var(--surface-0);
+    color: var(--text-1);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    top: -20%; left: 50%;
+    transform: translateX(-50%);
+    width: 140%; height: 80%;
+    background: radial-gradient(ellipse at center top, var(--gold-dim) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .wrap {
+    position: relative; z-index: 1;
+    max-width: 640px; margin: 0 auto;
+    padding: 48px 24px 64px;
+  }
+  header { text-align: center; padding: 24px 0 40px; }
+  .brand {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 16px; border: 1px solid var(--border-gold);
+    border-radius: 999px; background: var(--gold-dim);
+    font-size: 12px; font-weight: 600; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--gold-light); margin-bottom: 32px;
+  }
+  .brand::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--gold-light); box-shadow: 0 0 12px var(--gold-glow);
+  }
+  h1 {
+    font-size: clamp(32px, 8vw, 48px); font-weight: 800;
+    letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 20px;
+  }
+  h1 .accent {
+    color: var(--gold-light);
+    background: linear-gradient(135deg, var(--gold-light), var(--gold));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .lede { font-size: clamp(16px, 4vw, 18px); color: var(--text-2); max-width: 520px; margin: 0 auto; line-height: 1.55; }
+  .cta-wrap { margin: 40px 0 56px; text-align: center; }
+  .cta {
+    display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+    padding: 18px 32px;
+    background: linear-gradient(135deg, var(--gold-light), var(--gold));
+    color: #1a1000; font-family: inherit; font-size: 16px; font-weight: 700;
+    text-decoration: none; border-radius: var(--radius-md); border: none; cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 4px 24px var(--gold-glow), 0 0 0 1px var(--gold);
+    min-width: 260px;
+  }
+  .cta:hover, .cta:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px var(--gold-glow), 0 0 0 1px var(--gold-light);
+    outline: none;
+  }
+  .cta:active { transform: translateY(0); }
+  .cta-icon { width: 20px; height: 20px; flex-shrink: 0; }
+  .cta-hint { display: block; margin-top: 14px; font-size: 13px; color: var(--text-3); letter-spacing: 0.02em; }
+  section { margin-bottom: 48px; }
+  .section-label {
+    display: inline-block; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.18em; text-transform: uppercase; color: var(--gold); margin-bottom: 16px;
+  }
+  h2 { font-size: clamp(22px, 5vw, 26px); font-weight: 700; letter-spacing: -0.01em; margin-bottom: 20px; line-height: 1.25; }
+  p { color: var(--text-2); font-size: 16px; line-height: 1.65; }
+  p + p { margin-top: 14px; }
+  .steps { display: grid; gap: 16px; }
+  .step {
+    padding: 24px; background: var(--surface-1); border: 1px solid var(--border-1);
+    border-radius: var(--radius-md); display: grid; grid-template-columns: 44px 1fr;
+    gap: 20px; align-items: start; transition: border-color 0.2s ease, background 0.2s ease;
+  }
+  .step:hover { border-color: var(--border-gold); background: var(--surface-2); }
+  .step-num {
+    display: flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--gold-dim); border: 1px solid var(--border-gold);
+    color: var(--gold-light); font-size: 18px; font-weight: 700;
+  }
+  .step-title { font-size: 17px; font-weight: 600; color: var(--text-1); margin-bottom: 6px; }
+  .step-body { color: var(--text-2); font-size: 15px; line-height: 1.55; }
+  .package {
+    padding: 28px; background: var(--surface-1); border: 1px solid var(--border-1);
+    border-radius: var(--radius-lg); position: relative; overflow: hidden;
+  }
+  .package::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+  .package-title {
+    font-size: 14px; font-weight: 600; color: var(--text-3);
+    letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 18px;
+  }
+  .pieces { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+  .piece {
+    padding: 14px 16px; background: var(--surface-2); border: 1px solid var(--border-1);
+    border-radius: var(--radius-sm); display: flex; align-items: center; gap: 10px;
+  }
+  .piece-icon { font-size: 20px; line-height: 1; }
+  .piece-label { font-size: 14px; font-weight: 600; color: var(--text-1); }
+  .final-cta {
+    margin-top: 56px; padding: 32px 24px; background: var(--surface-1);
+    border: 1px solid var(--border-gold); border-radius: var(--radius-lg);
+    text-align: center; position: relative;
+  }
+  .final-cta h2 { margin-bottom: 12px; }
+  .final-cta p { margin-bottom: 24px; font-size: 15px; }
+  footer {
+    margin-top: 64px; padding-top: 32px; border-top: 1px solid var(--border-1);
+    text-align: center; color: var(--text-3); font-size: 13px; letter-spacing: 0.02em;
+  }
+  footer strong { color: var(--text-2); font-weight: 600; }
+  @media (max-width: 480px) {
+    .wrap { padding: 32px 20px 48px; }
+    header { padding: 16px 0 32px; }
+    .cta { width: 100%; padding: 18px 24px; }
+    .step { padding: 20px; gap: 16px; }
+    .package { padding: 22px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+    html { scroll-behavior: auto; }
+  }
+
+  /* ─── AUTH GATE ─────────────────────────────── */
+  #auth-gate {
+    position: fixed; inset: 0; background: var(--surface-0);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999; padding: 24px;
+  }
+  .auth-box {
+    width: 100%; max-width: 360px;
+    display: flex; flex-direction: column; gap: 20px; text-align: center;
+  }
+  .auth-logo { font-size: 32px; font-weight: 800; color: var(--gold); letter-spacing: 3px; }
+  .auth-subtitle { color: var(--text-2); font-size: 14px; margin-top: -12px; }
+  .auth-input {
+    width: 100%; padding: 14px 18px; background: var(--surface-2);
+    border: 1px solid var(--border-1); border-radius: var(--radius-md);
+    color: var(--text-1); font-size: 16px; font-family: inherit; outline: none;
+    transition: border-color 0.2s;
+  }
+  .auth-input:focus { border-color: var(--border-gold); }
+  .auth-btn {
+    width: 100%; padding: 15px; background: linear-gradient(135deg, var(--gold-light), var(--gold));
+    color: #1a1000; font-weight: 700; font-size: 15px; font-family: inherit;
+    border: none; border-radius: var(--radius-md); cursor: pointer;
+    transition: opacity 0.2s, transform 0.2s;
+  }
+  .auth-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+  .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .auth-msg { font-size: 13px; min-height: 20px; }
+  .auth-msg.error { color: #e05555; }
+  .auth-msg.success { color: var(--gold-light); }
+  .auth-msg.info { color: var(--text-2); }
+  .auth-back { background: none; border: none; color: var(--text-3); font-size: 13px; cursor: pointer; font-family: inherit; }
+  .auth-back:hover { color: var(--text-2); }
+  .auth-spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--gold-dim); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- AUTH GATE -->
+<div id="auth-gate">
+  <div class="auth-box">
+    <div>
+      <div class="auth-logo">PALCO</div>
+      <div class="auth-subtitle" id="auth-subtitle">Área exclusiva para alunos</div>
+    </div>
+
+    <!-- Estado: formulário de email -->
+    <div id="state-form">
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <input id="auth-email" class="auth-input" type="email" placeholder="Seu e-mail de acesso" autocomplete="email" />
+        <button class="auth-btn" id="auth-submit-btn" onclick="enviarMagicLink()">Enviar link de acesso</button>
+        <div class="auth-msg" id="auth-msg"></div>
+      </div>
+    </div>
+
+    <!-- Estado: email enviado -->
+    <div id="state-sent" style="display:none;">
+      <div style="font-size:40px;margin-bottom:8px;">✉️</div>
+      <p style="color:var(--text-1);font-size:16px;font-weight:600;margin-bottom:8px;">Verifique seu e-mail</p>
+      <p style="color:var(--text-2);font-size:14px;margin-bottom:16px;">Enviamos um link de acesso para <strong id="sent-email" style="color:var(--gold-light)"></strong>. Clique no link para entrar.</p>
+      <button class="auth-back" onclick="voltarForm()">← Usar outro e-mail</button>
+    </div>
+
+    <!-- Estado: verificando acesso -->
+    <div id="state-checking" style="display:none;">
+      <p style="color:var(--text-2);font-size:14px;"><span class="auth-spinner"></span>Verificando acesso...</p>
+    </div>
+
+    <!-- Estado: acesso negado -->
+    <div id="state-denied" style="display:none;">
+      <div style="font-size:40px;margin-bottom:8px;">🔒</div>
+      <p style="color:var(--text-1);font-size:16px;font-weight:600;margin-bottom:8px;">Acesso não autorizado</p>
+      <p style="color:var(--text-2);font-size:14px;margin-bottom:16px;">Este e-mail não está cadastrado como aluno do Palco.</p>
+      <button class="auth-back" onclick="voltarForm()">← Tentar outro e-mail</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONTEÚDO PRINCIPAL (oculto até autenticação) -->
+<div class="wrap" id="main-content" style="display:none;">
+
+  <header>
+    <span class="brand">Palco</span>
+    <h1>O conteúdo da sua semana,<br><span class="accent">pronto em 20 minutos.</span></h1>
+    <p class="lede">
+      Palco é um agente treinado para músico profissional.
+      Você conta o que aconteceu na semana — ele devolve o pacote
+      completo para o seu Instagram.
+    </p>
+  </header>
+
+  <div class="cta-wrap">
+    <a
+      class="cta"
+      href="https://wa.me/556282377569?text=Oi%2C%20quero%20conhecer%20o%20Palco"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Iniciar conversa com o Palco no WhatsApp"
+    >
+      <svg class="cta-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+      </svg>
+      Começar no WhatsApp
+    </a>
+    <span class="cta-hint">Abre conversa direta — sem fricção.</span>
+  </div>
+
+  <section aria-labelledby="como-funciona">
+    <span class="section-label">Como funciona</span>
+    <h2 id="como-funciona">Três passos, uma semana de conteúdo.</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div>
+          <div class="step-title">Você conta a semana</div>
+          <div class="step-body">Um show, uma aula, uma gravação, uma percepção. Manda no WhatsApp. Não precisa ser grande — precisa ser real.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div>
+          <div class="step-title">Palco gera o pacote</div>
+          <div class="step-body">Cruza o que aconteceu com a sua identidade (ativo principal, público, emoção-alvo) e devolve cinco peças prontas.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div>
+          <div class="step-title">Você ajusta e posta</div>
+          <div class="step-body">O pacote é ponto de partida, não produto final. Ajusta o que precisar — e publica no ritmo da sua semana.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="o-que-recebe">
+    <span class="section-label">O que você recebe</span>
+    <h2 id="o-que-recebe">Cinco peças, toda semana.</h2>
+    <p style="margin-bottom: 24px;">Um pacote completo alinhado à sua voz — você escolhe o que publica e quando.</p>
+    <div class="package" role="list">
+      <div class="package-title">Pacote semanal</div>
+      <div class="pieces">
+        <div class="piece" role="listitem"><span class="piece-icon" aria-hidden="true">📌</span><span class="piece-label">Feed</span></div>
+        <div class="piece" role="listitem"><span class="piece-icon" aria-hidden="true">🎬</span><span class="piece-label">Reels</span></div>
+        <div class="piece" role="listitem"><span class="piece-icon" aria-hidden="true">📱</span><span class="piece-label">Stories</span></div>
+        <div class="piece" role="listitem"><span class="piece-icon" aria-hidden="true">⚡</span><span class="piece-label">Gancho</span></div>
+        <div class="piece" role="listitem"><span class="piece-icon" aria-hidden="true">🎯</span><span class="piece-label">CTA</span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="final-cta">
+    <h2>Sua carreira merece uma estrutura à altura dela.</h2>
+    <p>Comece agora — em menos de 5 minutos você tem a sua ficha criada e o Palco pronto para a primeira semana.</p>
+    <a
+      class="cta"
+      href="https://wa.me/556282377569?text=Oi%2C%20quero%20conhecer%20o%20Palco"
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Iniciar conversa com o Palco no WhatsApp"
+    >
+      <svg class="cta-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+      </svg>
+      Iniciar no WhatsApp
+    </a>
+  </div>
+
+  <footer>
+    <p><strong>Palco</strong> — parte do ecossistema MAESTRO</p>
+    <p style="margin-top: 8px; font-size: 12px;">palcoapp.rota50ia.com</p>
+  </footer>
+
+</div>
+
+<!-- Supabase JS -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script>
+const SUPA_URL  = 'https://ctvdlamxicoxniyqcpfd.supabase.co';
+const SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0dmRsYW14aWNveG5peXFjcGZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA0MjQ0MDksImV4cCI6MjA1NjAwMDQwOX0.H00Y_vwQQBVmWrdIBdSb-IklfMfe7bzxdAESh7J0ouc';
+const supabase  = window.supabase.createClient(SUPA_URL, SUPA_ANON);
+
+function mostrarEstado(id) {
+  ['state-form','state-sent','state-checking','state-denied'].forEach(function(s){
+    document.getElementById(s).style.display = s === id ? 'block' : 'none';
+  });
+}
+
+function setMsg(txt, tipo) {
+  var el = document.getElementById('auth-msg');
+  el.textContent = txt;
+  el.className = 'auth-msg ' + (tipo || '');
+}
+
+function voltarForm() {
+  mostrarEstado('state-form');
+  document.getElementById('auth-subtitle').textContent = 'Área exclusiva para alunos';
+  setMsg('');
+  document.getElementById('auth-email').value = '';
+}
+
+async function enviarMagicLink() {
+  var email = document.getElementById('auth-email').value.trim().toLowerCase();
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    setMsg('Informe um e-mail válido.', 'error');
+    return;
+  }
+  var btn = document.getElementById('auth-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Enviando...';
+  setMsg('');
+
+  var _a = await supabase.auth.signInWithOtp({
+    email: email,
+    options: { emailRedirectTo: window.location.origin + window.location.pathname }
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Enviar link de acesso';
+
+  if (_a.error) {
+    setMsg('Erro ao enviar: ' + _a.error.message, 'error');
+    return;
+  }
+
+  document.getElementById('sent-email').textContent = email;
+  mostrarEstado('state-sent');
+}
+
+async function verificarAcesso(session) {
+  mostrarEstado('state-checking');
+  var email = session.user.email;
+
+  var _q = await supabase
+    .from('alunos_palco')
+    .select('ativo')
+    .eq('email', email)
+    .maybeSingle();
+
+  if (_q.error || !_q.data || !_q.data.ativo) {
+    await supabase.auth.signOut();
+    mostrarEstado('state-denied');
+    return;
+  }
+
+  // Acesso autorizado
+  document.getElementById('auth-gate').style.display = 'none';
+  document.getElementById('main-content').style.display = 'block';
+}
+
+// Inicialização: verificar sessão existente ou token na URL
+(async function init() {
+  // Supabase captura o token da URL automaticamente no onAuthStateChange
+  supabase.auth.onAuthStateChange(async function(event, session) {
+    if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session) {
+      await verificarAcesso(session);
+    }
+  });
+
+  // Verificar sessão ativa (reload da página)
+  var _s = await supabase.auth.getSession();
+  if (_s.data && _s.data.session) {
+    await verificarAcesso(_s.data.session);
+  }
+
+  // Enter no campo de email
+  document.getElementById('auth-email').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') enviarMagicLink();
+  });
+})();
+</script>
+
+</body>
+</html>
