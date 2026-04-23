@@ -93,18 +93,13 @@
             },
             {
               "name": "Prefer",
-              "value": "resolution=ignore-duplicates"
-            },
-            {
-              "name": "Prefer",
-              "value": "return=minimal"
+              "value": "resolution=ignore-duplicates,return=minimal"
             }
           ]
         },
         "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ email: $json.email, nome: $json.nome, ativo: true }) }}",
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ email: $json.email, nome: $json.nome, ativo: true }) }}",
         "options": {}
       }
     },
