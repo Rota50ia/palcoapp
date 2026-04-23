@@ -1,0 +1,181 @@
+{
+  "name": "PALCO APP — Eduzz Pós-Compra (produto 3012645)",
+  "nodes": [
+    {
+      "id": "node-webhook",
+      "name": "Webhook Eduzz",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-480, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "palco-poscompra-palcoapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "palco-poscompra-palcoapp"
+    },
+    {
+      "id": "node-verificar",
+      "name": "Compra de Teste?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-256, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-test",
+              "leftValue": "={{ $json.body.data.status }}",
+              "rightValue": "test",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "node-responder-teste",
+      "name": "Ignorar Teste",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [-32, 180],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "ok",
+        "options": { "responseCode": 200 }
+      }
+    },
+    {
+      "id": "node-formatar",
+      "name": "Formatar Dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-32, 400],
+      "parameters": {
+        "jsCode": "const data = $input.first().json.body.data;\n\nconst nome     = (data.buyer?.name     || '').trim();\nconst email    = (data.buyer?.email    || '').trim().toLowerCase();\nconst whatsapp = (data.buyer?.cellphone|| '').replace(/[^0-9]/g, '');\n\nreturn [{ json: { nome, email, whatsapp } }];"
+      }
+    },
+    {
+      "id": "node-supabase",
+      "name": "Inserir alunos_palco",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [224, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "https://ctvdlamxicoxniyqcpfd.supabase.co/rest/v1/alunos_palco",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0dmRsYW14aWNveG5peXFjcGZkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MDQyNDQwOSwiZXhwIjoyMDU2MDAwNDA5fQ.n43Tg5yI2HB2R3MCvZRqc0lZCWlnMAA8hFFRqDO_-9k"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN0dmRsYW14aWNveG5peXFjcGZkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MDQyNDQwOSwiZXhwIjoyMDU2MDAwNDA5fQ.n43Tg5yI2HB2R3MCvZRqc0lZCWlnMAA8hFFRqDO_-9k"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=ignore-duplicates"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ email: $json.email, nome: $json.nome, ativo: true }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-whatsapp",
+      "name": "Enviar WhatsApp Boas-Vindas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [448, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "https://edilsonmorais.uazapi.com/send/text",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "token",
+              "value": "62a7447d-fdb3-41e0-b342-4835cb812490"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $('Formatar Dados').item.json.whatsapp, text: 'Olá, ' + $('Formatar Dados').item.json.nome + '! 🎭\\n\\nSeu acesso ao *Palco* está liberado. ✅\\n\\nO Palco é um agente treinado para músico profissional. Você conta o que aconteceu na semana — ele devolve o pacote completo para o seu Instagram.\\n\\nPara ativar seu acesso:\\n\\n1. Acesse *palcoapp.rota50ia.com*\\n2. Clique em *Entrar com e-mail*\\n3. Use o e-mail: *' + $('Formatar Dados').item.json.email + '*\\n4. Clique em *Esqueci minha senha* para criar sua senha\\n\\nDepois de configurar, é só mandar uma mensagem aqui neste mesmo número quando quiser gerar seu primeiro pacote de conteúdo. 🎸\\n\\n— Equipe Maestro Palco' }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-responder-ok",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [672, 400],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "ok",
+        "options": { "responseCode": 200 }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Eduzz": {
+      "main": [
+        [{ "node": "Compra de Teste?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Compra de Teste?": {
+      "main": [
+        [{ "node": "Ignorar Teste",   "type": "main", "index": 0 }],
+        [{ "node": "Formatar Dados",  "type": "main", "index": 0 }]
+      ]
+    },
+    "Formatar Dados": {
+      "main": [
+        [{ "node": "Inserir alunos_palco", "type": "main", "index": 0 }]
+      ]
+    },
+    "Inserir alunos_palco": {
+      "main": [
+        [{ "node": "Enviar WhatsApp Boas-Vindas", "type": "main", "index": 0 }]
+      ]
+    },
+    "Enviar WhatsApp Boas-Vindas": {
+      "main": [
+        [{ "node": "Responder OK", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
