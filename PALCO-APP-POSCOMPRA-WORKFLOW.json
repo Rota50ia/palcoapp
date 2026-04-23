@@ -71,7 +71,7 @@
       "id": "node-supabase",
       "name": "Inserir alunos_palco",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "typeVersion": 4.1,
       "position": [224, 400],
       "parameters": {
         "method": "POST",
@@ -98,8 +98,9 @@
           ]
         },
         "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ email: $json.email, nome: $json.nome, ativo: true }) }}",
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ email: $json.email, nome: $json.nome, ativo: true }) }}",
         "options": {}
       }
     },
@@ -107,7 +108,7 @@
       "id": "node-whatsapp",
       "name": "Enviar WhatsApp Boas-Vindas",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "typeVersion": 4.1,
       "position": [448, 400],
       "parameters": {
         "method": "POST",
