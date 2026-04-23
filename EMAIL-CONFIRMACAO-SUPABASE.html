@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Confirme seu acesso — Palco</title>
+</head>
+<body style="margin:0;padding:0;background-color:#080808;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+
+  <!-- Preheader invisível -->
+  <span style="display:none;max-height:0;overflow:hidden;mso-hide:all;">
+    Um passo para acessar o Palco — confirme seu e-mail.
+  </span>
+
+  <!-- Wrapper -->
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#080808;">
+    <tr>
+      <td align="center" style="padding:40px 16px;">
+
+        <!-- Card -->
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
+
+          <!-- Logo / Header -->
+          <tr>
+            <td align="center" style="padding-bottom:32px;">
+              <table cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="background-color:rgba(201,162,39,0.10);border:1px solid rgba(201,162,39,0.35);border-radius:999px;padding:8px 20px;">
+                    <span style="font-size:11px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#e8c547;">&#9679;&nbsp; PALCO</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Linha dourada topo do card -->
+          <tr>
+            <td style="background:linear-gradient(90deg,transparent,#c9a227,transparent);height:1px;font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+
+          <!-- Corpo do card -->
+          <tr>
+            <td style="background-color:#101010;border:1px solid rgba(255,255,255,0.08);border-top:none;border-radius:0 0 16px 16px;padding:40px 36px 36px;">
+
+              <!-- Ícone -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="padding-bottom:24px;">
+                    <div style="display:inline-block;background-color:rgba(201,162,39,0.12);border:1px solid rgba(201,162,39,0.35);border-radius:50%;width:56px;height:56px;line-height:56px;text-align:center;font-size:24px;">
+                      ✉️
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Título -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="padding-bottom:12px;">
+                    <h1 style="margin:0;font-size:26px;font-weight:800;letter-spacing:-0.02em;color:#f0f0f0;line-height:1.2;">
+                      Confirme seu acesso
+                    </h1>
+                  </td>
+                </tr>
+                <tr>
+                  <td align="center" style="padding-bottom:32px;">
+                    <p style="margin:0;font-size:15px;color:#a8a8a8;line-height:1.6;max-width:380px;">
+                      Você criou uma conta no <strong style="color:#f0f0f0;">Palco</strong>. Clique no botão abaixo para confirmar seu e-mail e liberar o acesso.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Botão CTA -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="padding-bottom:28px;">
+                    <a href="{{ .ConfirmationURL }}"
+                       style="display:inline-block;background:linear-gradient(135deg,#e8c547,#c9a227);color:#1a1000;font-size:16px;font-weight:700;text-decoration:none;padding:16px 40px;border-radius:12px;letter-spacing:0.01em;">
+                      Confirmar e-mail
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Link alternativo -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="padding-bottom:24px;">
+                    <p style="margin:0;font-size:12px;color:#707070;line-height:1.6;">
+                      O botão não funcionou? Copie e cole o link abaixo no navegador:
+                    </p>
+                    <p style="margin:8px 0 0;font-size:11px;color:#a8a8a8;word-break:break-all;">
+                      <a href="{{ .ConfirmationURL }}" style="color:#c9a227;text-decoration:underline;">{{ .ConfirmationURL }}</a>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Aviso de expiração -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="background-color:#181818;border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:14px 18px;">
+                    <p style="margin:0;font-size:12px;color:#707070;line-height:1.5;">
+                      ⏱ Este link expira em <strong style="color:#a8a8a8;">24 horas</strong>. Se você não solicitou o acesso, ignore este e-mail.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding-top:28px;">
+              <p style="margin:0;font-size:12px;color:#505050;line-height:1.6;">
+                <strong style="color:#707070;">Palco</strong> — parte do ecossistema MAESTRO
+              </p>
+              <p style="margin:6px 0 0;font-size:11px;color:#404040;">
+                palcoapp.rota50ia.com
+              </p>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Card -->
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>
